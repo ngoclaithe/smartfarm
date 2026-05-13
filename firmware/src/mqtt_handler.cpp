@@ -15,10 +15,10 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
   OperationMode mode = g_mode;
   xSemaphoreGive(xMutex);
 
-  if (mode == MODE_MANUAL &&
-      (strcmp(reason, "schedule") == 0 || strcmp(reason, "threshold") == 0)) {
-    return;
-  }
+  bool isAuto = (strcmp(reason, "schedule") == 0 || strcmp(reason, "threshold") == 0);
+
+  if (mode == MODE_MANUAL && isAuto) return;
+  if (mode == MODE_SCHEDULE && !isAuto) return;
 
   const char* action = doc["action"];
   int duration = doc["duration_sec"] | 0;

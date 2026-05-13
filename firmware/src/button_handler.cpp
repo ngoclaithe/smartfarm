@@ -26,19 +26,23 @@ void TaskButton(void* pvParameters) {
   (void)pvParameters;
 
   for (;;) {
-    if (digitalRead(BTN_PUMP_PIN) == LOW && debounce(0)) {
-      togglePump();
-      publishState();
-    }
+    xSemaphoreTake(xMutex, portMAX_DELAY);
+    OperationMode mode = g_mode;
+    xSemaphoreGive(xMutex);
 
-    if (digitalRead(BTN_FAN_PIN) == LOW && debounce(1)) {
-      toggleFan();
-      publishState();
-    }
-
-    if (digitalRead(BTN_LIGHT_PIN) == LOW && debounce(2)) {
-      toggleLight();
-      publishState();
+    if (mode == MODE_MANUAL) {
+      if (digitalRead(BTN_PUMP_PIN) == LOW && debounce(0)) {
+        togglePump();
+        publishState();
+      }
+      if (digitalRead(BTN_FAN_PIN) == LOW && debounce(1)) {
+        toggleFan();
+        publishState();
+      }
+      if (digitalRead(BTN_LIGHT_PIN) == LOW && debounce(2)) {
+        toggleLight();
+        publishState();
+      }
     }
 
     if (digitalRead(BTN_MODE_PIN) == LOW && debounce(3)) {

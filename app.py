@@ -327,6 +327,11 @@ def api_history():
 
 @app.route("/api/control", methods=["POST"])
 def api_control():
+    with state_lock:
+        mode = device_state["mode"]
+    if mode != "manual":
+        return jsonify({"error": "Dang o che do hen gio, khong the dieu khien thu cong"}), 403
+
     body = request.get_json(silent=True) or {}
     action = body.get("action")
     duration_sec = int(body.get("duration_sec", 0))
