@@ -1,7 +1,6 @@
 const $ = (id) => document.getElementById(id);
 const $$ = (sel) => document.querySelectorAll(sel);
 
-// Toast notification system
 function showToast(message, type = 'success') {
   const container = $('toast-container');
   const toast = document.createElement('div');
@@ -11,14 +10,12 @@ function showToast(message, type = 'success') {
     <span>${message}</span>
   `;
   container.appendChild(toast);
-  
   setTimeout(() => {
     toast.style.animation = 'slideIn 0.3s ease reverse forwards';
     setTimeout(() => toast.remove(), 300);
   }, 3000);
 }
 
-// Navigation system
 function initNavigation() {
   const navItems = $$('.nav-item');
   const pages = $$('.page');
@@ -27,112 +24,72 @@ function initNavigation() {
   navItems.forEach(item => {
     item.addEventListener('click', (e) => {
       e.preventDefault();
-      
-      // Update active nav
       navItems.forEach(nav => nav.classList.remove('active'));
       item.classList.add('active');
-      
-      // Update title
       pageTitle.textContent = item.querySelector('span').textContent;
-      
-      // Show target page
       const targetId = item.getAttribute('data-target');
       pages.forEach(page => {
-        if (page.id === targetId) {
-          page.classList.add('active');
-        } else {
-          page.classList.remove('active');
-        }
+        page.classList.toggle('active', page.id === targetId);
       });
     });
   });
 }
 
-// API wrapper
 async function api(path, options = {}) {
   try {
     const response = await fetch(path, {
       headers: { "Content-Type": "application/json" },
       ...options,
     });
+    const data = await response.json();
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      throw new Error(data.error || `HTTP ${response.status}`);
     }
-    return await response.json();
+    return data;
   } catch (error) {
-    showToast(`Lỗi kết nối: ${error.message}`, 'error');
+    showToast(`Lỗi: ${error.message}`, 'error');
     throw error;
   }
 }
 
-// Chart System
+// Chart
 let sensorChart = null;
-let chartData = {
-  labels: [],
-  temp: [],
-  hum: [],
-  soil: []
-};
+let chartData = { labels: [], temp: [], hum: [], soil: [] };
 
 function initChart() {
   const ctx = document.getElementById('sensor-chart').getContext('2d');
-  
   const textColor = '#9cb0df';
   const gridColor = 'rgba(255, 255, 255, 0.05)';
-  
+
   sensorChart = new Chart(ctx, {
     type: 'line',
     data: {
       labels: chartData.labels,
       datasets: [
         {
-          label: 'Nhiệt độ (°C)',
-          data: chartData.temp,
-          borderColor: '#ef4444',
-          backgroundColor: 'rgba(239, 68, 68, 0.1)',
-          borderWidth: 2,
-          tension: 0.4,
-          fill: true
+          label: 'Nhiệt độ (°C)', data: chartData.temp,
+          borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.1)',
+          borderWidth: 2, tension: 0.4, fill: true
         },
         {
-          label: 'Độ ẩm KK (%)',
-          data: chartData.hum,
-          borderColor: '#3b82f6',
-          backgroundColor: 'rgba(59, 130, 246, 0.1)',
-          borderWidth: 2,
-          tension: 0.4,
-          fill: true
+          label: 'Độ ẩm KK (%)', data: chartData.hum,
+          borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)',
+          borderWidth: 2, tension: 0.4, fill: true
         },
         {
-          label: 'Độ ẩm đất (%)',
-          data: chartData.soil,
-          borderColor: '#8b5cf6',
-          backgroundColor: 'rgba(139, 92, 246, 0.1)',
-          borderWidth: 2,
-          tension: 0.4,
-          fill: true
+          label: 'Độ ẩm đất (%)', data: chartData.soil,
+          borderColor: '#8b5cf6', backgroundColor: 'rgba(139, 92, 246, 0.1)',
+          borderWidth: 2, tension: 0.4, fill: true
         }
       ]
     },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: {
-        mode: 'index',
-        intersect: false,
-      },
-      plugins: {
-        legend: { labels: { color: textColor } }
-      },
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { labels: { color: textColor } } },
       scales: {
-        x: {
-          grid: { color: gridColor },
-          ticks: { color: textColor }
-        },
-        y: {
-          grid: { color: gridColor },
-          ticks: { color: textColor }
-        }
+        x: { grid: { color: gridColor }, ticks: { color: textColor } },
+        y: { grid: { color: gridColor }, ticks: { color: textColor } }
       }
     }
   });
@@ -140,34 +97,21 @@ function initChart() {
 
 function updateChart(dataPoint) {
   if (!sensorChart) return;
-  
   const timeStr = dataPoint.created_at.split('T')[1] || dataPoint.created_at.split(' ')[1] || dataPoint.created_at;
-  const timeOnly = timeStr.substring(0, 8);
-  
-  chartData.labels.push(timeOnly);
+  chartData.labels.push(timeStr.substring(0, 8));
   chartData.temp.push(dataPoint.temperature);
   chartData.hum.push(dataPoint.air_humidity);
   chartData.soil.push(dataPoint.soil_moisture);
-  
-  // Keep max 20 points
   if (chartData.labels.length > 20) {
-    chartData.labels.shift();
-    chartData.temp.shift();
-    chartData.hum.shift();
-    chartData.soil.shift();
+    chartData.labels.shift(); chartData.temp.shift();
+    chartData.hum.shift(); chartData.soil.shift();
   }
-  
-  sensorChart.update('none'); // Use 'none' for smooth animation without full re-render
+  sensorChart.update('none');
 }
 
 function prependHistory(row) {
   const table = $("history-table");
-  
-  // Xóa empty row message nếu có
-  if (table.querySelector('td[colspan="4"]')) {
-    table.innerHTML = "";
-  }
-  
+  if (table.querySelector('td[colspan="4"]')) table.innerHTML = "";
   const tr = document.createElement("tr");
   tr.innerHTML = `
     <td>${row.created_at}</td>
@@ -176,32 +120,22 @@ function prependHistory(row) {
     <td><span style="color: #8b5cf6; font-weight: 500;">${row.soil_moisture.toFixed(1)} %</span></td>
   `;
   table.prepend(tr);
-  
-  // Giữ tối đa 20 dòng trên UI
-  if (table.children.length > 20) {
-    table.lastElementChild.remove();
-  }
+  if (table.children.length > 20) table.lastElementChild.remove();
 }
 
 async function loadInitialHistory() {
   const table = $("history-table");
-  table.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">Đang tải dữ liệu...</td></tr>`;
-  
+  table.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">Đang tải...</td></tr>`;
   try {
     const history = await api("/api/history?limit=20");
-    if (history.length === 0) {
+    if (!history.length) {
       table.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">Chưa có dữ liệu</td></tr>`;
       return;
     }
-    
     table.innerHTML = "";
-    // History trả về mảng cũ nhất trước tiên để vẽ chart
-    history.forEach((row) => {
-      updateChart(row);
-      prependHistory(row); // Prepend đẩy dòng mới nhất lên đầu bảng
-    });
-  } catch (err) {
-    table.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--danger);">Không thể tải lịch sử</td></tr>`;
+    history.forEach(row => { updateChart(row); prependHistory(row); });
+  } catch {
+    table.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--danger);">Không thể tải</td></tr>`;
   }
 }
 
@@ -212,13 +146,13 @@ function renderSchedules(items) {
     root.innerHTML = "<p style='color: var(--text-muted);'>Chưa có lịch tưới nào được thiết lập.</p>";
     return;
   }
-  items.forEach((item) => {
+  items.forEach(item => {
     const row = document.createElement("div");
     row.className = "schedule-item";
     row.innerHTML = `
       <div class="schedule-info">
         <strong><i class="fa-regular fa-clock"></i> ${item.time_of_day}</strong>
-        <span>Thời gian tưới: ${item.duration_sec}s | Lần cuối: ${item.last_run_date || "Chưa chạy"}</span>
+        <span>Tưới: ${item.duration_sec}s | Lần cuối: ${item.last_run_date || "Chưa chạy"}</span>
       </div>
       <div class="schedule-actions">
         <button class="btn sm toggle-btn ${item.enabled ? '' : 'primary'}">
@@ -229,18 +163,14 @@ function renderSchedules(items) {
     `;
     row.querySelector(".toggle-btn").onclick = async () => {
       await api(`/api/schedules/${item.id}/toggle`, {
-        method: "POST",
-        body: JSON.stringify({ enabled: !item.enabled }),
+        method: "POST", body: JSON.stringify({ enabled: !item.enabled }),
       });
       showToast(`Đã ${item.enabled ? 'tắt' : 'bật'} lịch tưới ${item.time_of_day}`);
       await loadSchedules();
     };
     row.querySelector(".delete-btn").onclick = async () => {
-      if (confirm(`Bạn có chắc muốn xóa lịch lúc ${item.time_of_day}?`)) {
-        await api("/api/schedules", {
-          method: "DELETE",
-          body: JSON.stringify({ id: item.id }),
-        });
+      if (confirm(`Xóa lịch lúc ${item.time_of_day}?`)) {
+        await api("/api/schedules", { method: "DELETE", body: JSON.stringify({ id: item.id }) });
         showToast("Đã xóa lịch tưới");
         await loadSchedules();
       }
@@ -250,11 +180,10 @@ function renderSchedules(items) {
 }
 
 function updateLatestData(data) {
-  const badge = $("last-updated");
   $("temperature").textContent = data.temperature.toFixed(1);
   $("air_humidity").textContent = data.air_humidity.toFixed(1);
   $("soil_moisture").textContent = data.soil_moisture.toFixed(1);
-  
+  const badge = $("last-updated");
   badge.innerHTML = `<i class="fa-solid fa-check"></i> Cập nhật: ${data.created_at}`;
   badge.style.color = 'var(--primary)';
   badge.style.background = 'rgba(16, 185, 129, 0.1)';
@@ -272,10 +201,55 @@ function updateMqttStatus(isConnected) {
   }
 }
 
-// SSE Connection
+// Device state sync
+let isSendingControl = false;
+
+function updateDeviceState(state) {
+  const toggles = [
+    { id: 'toggle-pump', label: 'pump-label', key: 'pump' },
+    { id: 'toggle-fan', label: 'fan-label', key: 'fan' },
+    { id: 'toggle-light', label: 'light-label', key: 'light' },
+  ];
+
+  toggles.forEach(({ id, label, key }) => {
+    const input = $(id);
+    const lbl = $(label);
+    if (!input || !lbl) return;
+    const isOn = !!state[key];
+    input.checked = isOn;
+    lbl.textContent = isOn ? "Đang bật" : "Đang tắt";
+    lbl.className = `toggle-status ${isOn ? 'on' : 'off'}`;
+  });
+
+  const isManual = state.mode === "manual";
+  $$('.control-card').forEach(card => {
+    card.classList.toggle('disabled', !isManual);
+  });
+}
+
+function setupToggle(toggleId, onAction, offAction) {
+  const input = $(toggleId);
+  if (!input) return;
+  input.addEventListener('change', async () => {
+    if (isSendingControl) return;
+    isSendingControl = true;
+    const action = input.checked ? onAction : offAction;
+    try {
+      await api("/api/control", {
+        method: "POST", body: JSON.stringify({ action }),
+      });
+      showToast(`Đã gửi lệnh: ${input.checked ? 'Bật' : 'Tắt'}`);
+    } catch {
+      input.checked = !input.checked;
+    } finally {
+      isSendingControl = false;
+    }
+  });
+}
+
+// SSE
 function initSSE() {
   const evtSource = new EventSource("/api/stream");
-  
   evtSource.onmessage = function(event) {
     try {
       const payload = JSON.parse(event.data);
@@ -285,20 +259,14 @@ function initSSE() {
         updateLatestData(payload.data);
         updateChart(payload.data);
         prependHistory(payload.data);
-      } else if (payload.type === 'init') {
-        updateMqttStatus(payload.data.mqtt_connected);
-        if (payload.data.latest) {
-          updateLatestData(payload.data.latest);
-        }
+      } else if (payload.type === 'device_state') {
+        updateDeviceState(payload.data);
       }
     } catch(err) {
       console.error("SSE parse error", err);
     }
   };
-  
-  evtSource.onerror = function() {
-    updateMqttStatus(false);
-  };
+  evtSource.onerror = () => updateMqttStatus(false);
 }
 
 async function loadSettings() {
@@ -313,51 +281,23 @@ async function loadSchedules() {
   renderSchedules(schedules);
 }
 
-async function initActions() {
-  const setupControlBtn = (btnId, action, durationId = null) => {
-    const btn = $(btnId);
-    if (!btn) return;
-    
-    btn.onclick = async () => {
-      const originalHtml = btn.innerHTML;
-      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang gửi...';
-      btn.disabled = true;
-      
-      const payload = { action };
-      if (durationId) {
-        payload.duration_sec = parseInt($(durationId).value || "8", 10);
-      }
-      
-      try {
-        await api("/api/control", {
-          method: "POST",
-          body: JSON.stringify(payload),
-        });
-        showToast(`Đã gửi lệnh: ${action}`);
-      } finally {
-        setTimeout(() => {
-          btn.innerHTML = originalHtml;
-          btn.disabled = false;
-        }, 1000);
-      }
-    };
-  };
+async function loadDeviceState() {
+  try {
+    const state = await api("/api/device-state");
+    updateDeviceState(state);
+  } catch {}
+}
 
-  // Device Controls
-  setupControlBtn("pump-on", "pump_on", "manual-duration");
-  setupControlBtn("pump-off", "pump_off");
-  setupControlBtn("fan-on", "fan_on");
-  setupControlBtn("fan-off", "fan_off");
-  setupControlBtn("light-on", "light_on");
-  setupControlBtn("light-off", "light_off");
+function initActions() {
+  setupToggle("toggle-pump", "pump_on", "pump_off");
+  setupToggle("toggle-fan", "fan_on", "fan_off");
+  setupToggle("toggle-light", "light_on", "light_off");
 
-  // Settings Controls
   $("save-settings").onclick = async () => {
     const btn = $("save-settings");
-    const originalText = btn.innerHTML;
+    const orig = btn.innerHTML;
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang lưu...';
     btn.disabled = true;
-    
     try {
       await api("/api/settings", {
         method: "POST",
@@ -370,7 +310,7 @@ async function initActions() {
       showToast("Đã lưu cấu hình tự động");
       await loadSettings();
     } finally {
-      btn.innerHTML = originalText;
+      btn.innerHTML = orig;
       btn.disabled = false;
     }
   };
@@ -396,14 +336,9 @@ async function bootstrap() {
   initNavigation();
   initChart();
   initSSE();
-  
   try {
-    await Promise.all([
-      loadSettings(), 
-      loadSchedules(), 
-      loadInitialHistory()
-    ]);
-    await initActions();
+    await Promise.all([loadSettings(), loadSchedules(), loadInitialHistory(), loadDeviceState()]);
+    initActions();
   } catch (err) {
     console.error("Bootstrap error:", err);
   }

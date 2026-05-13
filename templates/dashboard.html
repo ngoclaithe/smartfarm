@@ -103,17 +103,16 @@
               <div class="card control-card">
                 <div class="card-header">
                   <div class="icon-wrap"><i class="fa-solid fa-water"></i></div>
-                  <h3>Điều khiển Bơm Nước</h3>
+                  <h3>Bơm Nước</h3>
                 </div>
                 <div class="card-body">
-                  <p class="description">Điều khiển máy bơm nước thủ công. Đặt thời gian tưới và kích hoạt để bơm hoạt động ngay lập tức.</p>
-                  <div class="form-group">
-                    <label for="manual-duration">Thời gian tưới (giây)</label>
-                    <input id="manual-duration" type="number" min="1" value="8" />
-                  </div>
-                  <div class="actions">
-                    <button id="pump-on" class="btn primary"><i class="fa-solid fa-play"></i> Bật bơm</button>
-                    <button id="pump-off" class="btn danger"><i class="fa-solid fa-stop"></i> Tắt bơm</button>
+                  <p class="description">Bật tắt máy bơm nước thủ công.</p>
+                  <div class="control-toggle">
+                    <label class="toggle-switch large">
+                      <input id="toggle-pump" type="checkbox" />
+                      <span class="slider"></span>
+                    </label>
+                    <span id="pump-label" class="toggle-status off">Đang tắt</span>
                   </div>
                 </div>
               </div>
@@ -121,13 +120,16 @@
               <div class="card control-card">
                 <div class="card-header">
                   <div class="icon-wrap" style="color: #3b82f6; background: rgba(59, 130, 246, 0.1);"><i class="fa-solid fa-fan"></i></div>
-                  <h3>Điều khiển Quạt</h3>
+                  <h3>Quạt</h3>
                 </div>
                 <div class="card-body">
-                  <p class="description">Bật tắt hệ thống quạt thông gió để điều hòa nhiệt độ không khí trong nhà màng.</p>
-                  <div class="actions">
-                    <button id="fan-on" class="btn primary"><i class="fa-solid fa-play"></i> Bật quạt</button>
-                    <button id="fan-off" class="btn danger"><i class="fa-solid fa-stop"></i> Tắt quạt</button>
+                  <p class="description">Bật tắt quạt thông gió điều hòa nhiệt độ.</p>
+                  <div class="control-toggle">
+                    <label class="toggle-switch large">
+                      <input id="toggle-fan" type="checkbox" />
+                      <span class="slider"></span>
+                    </label>
+                    <span id="fan-label" class="toggle-status off">Đang tắt</span>
                   </div>
                 </div>
               </div>
@@ -135,13 +137,16 @@
               <div class="card control-card">
                 <div class="card-header">
                   <div class="icon-wrap" style="color: #eab308; background: rgba(234, 179, 8, 0.1);"><i class="fa-regular fa-lightbulb"></i></div>
-                  <h3>Điều khiển Đèn</h3>
+                  <h3>Đèn</h3>
                 </div>
                 <div class="card-body">
-                  <p class="description">Điều khiển hệ thống đèn chiếu sáng quang hợp cho cây trồng vào ban đêm.</p>
-                  <div class="actions">
-                    <button id="light-on" class="btn primary"><i class="fa-solid fa-play"></i> Bật đèn</button>
-                    <button id="light-off" class="btn danger"><i class="fa-solid fa-stop"></i> Tắt đèn</button>
+                  <p class="description">Bật tắt đèn chiếu sáng quang hợp.</p>
+                  <div class="control-toggle">
+                    <label class="toggle-switch large">
+                      <input id="toggle-light" type="checkbox" />
+                      <span class="slider"></span>
+                    </label>
+                    <span id="light-label" class="toggle-status off">Đang tắt</span>
                   </div>
                 </div>
               </div>

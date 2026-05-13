@@ -517,6 +517,51 @@ input:checked + .slider:before {
   font-weight: 500;
 }
 
+.toggle-switch.large {
+  width: 60px;
+  height: 32px;
+}
+
+.toggle-switch.large .slider:before {
+  height: 24px;
+  width: 24px;
+  left: 4px;
+  bottom: 4px;
+}
+
+.toggle-switch.large input:checked + .slider:before {
+  transform: translateX(28px);
+}
+
+.control-toggle {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.toggle-status {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.toggle-status.on {
+  color: var(--primary);
+}
+
+.toggle-status.off {
+  color: var(--text-muted);
+}
+
+.control-card.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.control-card.disabled .slider {
+  cursor: not-allowed;
+}
+
 /* Tables & Lists */
 table {
   width: 100%;
