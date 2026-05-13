@@ -1,0 +1,13 @@
+[project]
+name = "smart-farm-dashboard"
+version = "0.1.0"
+description = "Smart Farm dashboard with Flask, MQTT, and SQLite"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "flask>=3.0.0",
+  "paho-mqtt>=2.1.0",
+]
+
+[tool.uv]
+dev-dependencies = []

@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Smart Farm - Bảng Điều Khiển</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body>
+    <div class="app-layout">
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <div class="sidebar-bg" style="background-image: linear-gradient(rgba(11, 18, 32, 0.85), rgba(11, 18, 32, 0.95)), url('{{ url_for('static', filename='images/sidebar.png') }}');"></div>
+        <div class="sidebar-content">
+          <div class="sidebar-header">
+            <div class="logo-icon"><i class="fa-solid fa-leaf"></i></div>
+            <h2>Smart Farm</h2>
+          </div>
+          <nav class="sidebar-nav">
+            <a href="#" class="nav-item active" data-target="page-dashboard">
+              <i class="fa-solid fa-chart-pie"></i> <span>Tổng quan</span>
+            </a>
+            <a href="#" class="nav-item" data-target="page-control">
+              <i class="fa-solid fa-gamepad"></i> <span>Điều khiển</span>
+            </a>
+            <a href="#" class="nav-item" data-target="page-automation">
+              <i class="fa-solid fa-robot"></i> <span>Tự động hóa</span>
+            </a>
+            <a href="#" class="nav-item" data-target="page-history">
+              <i class="fa-solid fa-clock-rotate-left"></i> <span>Lịch sử</span>
+            </a>
+          </nav>
+        </div>
+      </aside>
+
+      <!-- Main Content -->
+      <main class="main-content">
+        <header class="topbar">
+          <div class="topbar-left">
+            <h1 id="page-title">Tổng quan</h1>
+            <p id="mqtt-status" class="status-badge disconnected"><i class="fa-solid fa-circle-xmark"></i> Đang kết nối server...</p>
+          </div>
+          <div class="topbar-right">
+            <span id="last-updated" class="badge"><i class="fa-solid fa-spinner fa-spin"></i> Đang chờ dữ liệu...</span>
+          </div>
+        </header>
+
+        <div class="pages-container">
+          <!-- Page: Dashboard -->
+          <section id="page-dashboard" class="page active">
+            <div class="hero-banner" style="background-image: linear-gradient(to right, rgba(11,18,32,0.9), rgba(11,18,32,0.2)), url('{{ url_for('static', filename='images/banner.png') }}');">
+              <div class="hero-content">
+                <h2>Giám sát Nông nghiệp Thông minh</h2>
+                <p>Theo dõi và điều khiển trang trại của bạn từ bất kỳ đâu, vào bất kỳ lúc nào.</p>
+              </div>
+            </div>
+
+            <div class="grid metrics">
+              <article class="card metric temperature">
+                <div class="metric-icon"><i class="fa-solid fa-temperature-half"></i></div>
+                <div class="metric-data">
+                  <h3>Nhiệt độ</h3>
+                  <p><span id="temperature">--</span> <small>°C</small></p>
+                </div>
+              </article>
+              <article class="card metric humidity">
+                <div class="metric-icon"><i class="fa-solid fa-droplet"></i></div>
+                <div class="metric-data">
+                  <h3>Độ ẩm không khí</h3>
+                  <p><span id="air_humidity">--</span> <small>%</small></p>
+                </div>
+              </article>
+              <article class="card metric soil">
+                <div class="metric-icon"><i class="fa-solid fa-mound"></i></div>
+                <div class="metric-data">
+                  <h3>Độ ẩm đất</h3>
+                  <p><span id="soil_moisture">--</span> <small>%</small></p>
+                </div>
+              </article>
+            </div>
+            
+            <div class="card" style="margin-top: 24px;">
+              <div class="card-header">
+                <div class="icon-wrap"><i class="fa-solid fa-chart-line"></i></div>
+                <h3>Biểu đồ dữ liệu môi trường (Gần đây)</h3>
+              </div>
+              <div class="card-body">
+                <div style="height: 350px; width: 100%;">
+                  <canvas id="sensor-chart"></canvas>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Page: Control -->
+          <section id="page-control" class="page">
+            <div class="grid control-panel">
+              <div class="card control-card">
+                <div class="card-header">
+                  <div class="icon-wrap"><i class="fa-solid fa-water"></i></div>
+                  <h3>Điều khiển Bơm Nước</h3>
+                </div>
+                <div class="card-body">
+                  <p class="description">Điều khiển máy bơm nước thủ công. Đặt thời gian tưới và kích hoạt để bơm hoạt động ngay lập tức.</p>
+                  <div class="form-group">
+                    <label for="manual-duration">Thời gian tưới (giây)</label>
+                    <input id="manual-duration" type="number" min="1" value="8" />
+                  </div>
+                  <div class="actions">
+                    <button id="pump-on" class="btn primary"><i class="fa-solid fa-play"></i> Bật bơm</button>
+                    <button id="pump-off" class="btn danger"><i class="fa-solid fa-stop"></i> Tắt bơm</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card control-card">
+                <div class="card-header">
+                  <div class="icon-wrap" style="color: #3b82f6; background: rgba(59, 130, 246, 0.1);"><i class="fa-solid fa-fan"></i></div>
+                  <h3>Điều khiển Quạt</h3>
+                </div>
+                <div class="card-body">
+                  <p class="description">Bật tắt hệ thống quạt thông gió để điều hòa nhiệt độ không khí trong nhà màng.</p>
+                  <div class="actions">
+                    <button id="fan-on" class="btn primary"><i class="fa-solid fa-play"></i> Bật quạt</button>
+                    <button id="fan-off" class="btn danger"><i class="fa-solid fa-stop"></i> Tắt quạt</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card control-card">
+                <div class="card-header">
+                  <div class="icon-wrap" style="color: #eab308; background: rgba(234, 179, 8, 0.1);"><i class="fa-regular fa-lightbulb"></i></div>
+                  <h3>Điều khiển Đèn</h3>
+                </div>
+                <div class="card-body">
+                  <p class="description">Điều khiển hệ thống đèn chiếu sáng quang hợp cho cây trồng vào ban đêm.</p>
+                  <div class="actions">
+                    <button id="light-on" class="btn primary"><i class="fa-solid fa-play"></i> Bật đèn</button>
+                    <button id="light-off" class="btn danger"><i class="fa-solid fa-stop"></i> Tắt đèn</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Page: Automation -->
+          <section id="page-automation" class="page">
+            <div class="grid schedule-panel">
+              <article class="card">
+                <div class="card-header">
+                  <div class="icon-wrap"><i class="fa-solid fa-gears"></i></div>
+                  <h3>Tự động theo ngưỡng (Bơm)</h3>
+                </div>
+                <div class="card-body">
+                  <p class="description">Tự động bật bơm khi độ ẩm đất xuống dưới ngưỡng cho phép.</p>
+                  <div class="form-group inline">
+                    <label class="toggle-switch">
+                      <input id="threshold-enabled" type="checkbox" />
+                      <span class="slider"></span>
+                    </label>
+                    <span class="toggle-label">Kích hoạt tự động</span>
+                  </div>
+                  <div class="form-group">
+                    <label for="soil-threshold">Ngưỡng độ ẩm đất (%)</label>
+                    <input id="soil-threshold" type="number" min="0" max="100" step="0.1" value="30" />
+                  </div>
+                  <div class="form-group">
+                    <label for="default-duration">Thời gian tưới tự động (giây)</label>
+                    <input id="default-duration" type="number" min="1" value="8" />
+                  </div>
+                  <button id="save-settings" class="btn"><i class="fa-solid fa-floppy-disk"></i> Lưu cấu hình</button>
+                </div>
+              </article>
+
+              <article class="card">
+                <div class="card-header">
+                  <div class="icon-wrap"><i class="fa-regular fa-calendar-plus"></i></div>
+                  <h3>Đặt lịch tưới</h3>
+                </div>
+                <div class="card-body">
+                  <p class="description">Thiết lập thời gian tưới nước tự động trong ngày.</p>
+                  <div class="form-group">
+                    <label for="schedule-time">Thời gian (HH:MM)</label>
+                    <input id="schedule-time" type="time" />
+                  </div>
+                  <div class="form-group">
+                    <label for="schedule-duration">Thời gian tưới (giây)</label>
+                    <input id="schedule-duration" type="number" min="1" value="10" />
+                  </div>
+                  <button id="add-schedule" class="btn primary"><i class="fa-solid fa-plus"></i> Thêm lịch</button>
+                </div>
+              </article>
+
+              <article class="card span-2">
+                <div class="card-header">
+                  <div class="icon-wrap"><i class="fa-solid fa-list-check"></i></div>
+                  <h3>Danh sách lịch tưới</h3>
+                </div>
+                <div class="card-body">
+                  <div id="schedule-list">
+                    <!-- Loaded via JS -->
+                  </div>
+                </div>
+              </article>
+            </div>
+          </section>
+
+          <!-- Page: History -->
+          <section id="page-history" class="page">
+            <div class="card">
+              <div class="card-header">
+                <div class="icon-wrap"><i class="fa-solid fa-clock-rotate-left"></i></div>
+                <h3>Lịch sử dữ liệu gần đây</h3>
+              </div>
+              <div class="table-responsive">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Thời gian</th>
+                      <th>Nhiệt độ</th>
+                      <th>Độ ẩm không khí</th>
+                      <th>Độ ẩm đất</th>
+                    </tr>
+                  </thead>
+                  <tbody id="history-table">
+                    <!-- Loaded via JS -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  </body>
+</html>
