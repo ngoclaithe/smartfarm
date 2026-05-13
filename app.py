@@ -29,6 +29,13 @@ mqtt_client: mqtt.Client | None = None
 state_lock = threading.Lock()
 last_auto_trigger_at = 0.0
 
+device_state = {
+    "pump": False,
+    "fan": False,
+    "light": False,
+    "mode": "manual",
+}
+
 sse_clients = []
 
 def notify_clients(event_type: str, data: dict) -> None:
@@ -184,12 +191,18 @@ def on_mqtt_message(client, userdata, msg) -> None:
         temperature = float(payload["temperature"])
         air_humidity = float(payload["air_humidity"])
         soil_moisture = float(payload["soil_moisture"])
-        
-        # Save to DB
+
         saved_data = insert_sensor_data(temperature, air_humidity, soil_moisture)
-        
-        # Push to SSE
         notify_clients("sensor", saved_data)
+
+        if "pump" in payload:
+            with state_lock:
+                device_state["pump"]  = bool(payload.get("pump", False))
+                device_state["fan"]   = bool(payload.get("fan", False))
+                device_state["light"] = bool(payload.get("light", False))
+                device_state["mode"]  = payload.get("mode", "manual")
+                current = dict(device_state)
+            notify_clients("device_state", current)
     except (KeyError, ValueError, TypeError, json.JSONDecodeError) as exc:
         print(f"Invalid sensor payload: {exc}")
 
@@ -210,6 +223,12 @@ def threshold_worker() -> None:
     global last_auto_trigger_at
     while True:
         try:
+            with state_lock:
+                mode = device_state["mode"]
+            if mode != "schedule":
+                time.sleep(AUTO_CHECK_INTERVAL_SECONDS)
+                continue
+
             settings = get_settings()
             latest = get_latest_data()
             if settings and latest and settings["threshold_enabled"] == 1:
@@ -230,6 +249,12 @@ def threshold_worker() -> None:
 def schedule_worker() -> None:
     while True:
         try:
+            with state_lock:
+                mode = device_state["mode"]
+            if mode != "schedule":
+                time.sleep(SCHEDULE_CHECK_INTERVAL_SECONDS)
+                continue
+
             now = datetime.now()
             current_hhmm = now.strftime("%H:%M")
             today = now.strftime("%Y-%m-%d")
@@ -265,10 +290,13 @@ def api_stream():
         q = queue.Queue(maxsize=20)
         sse_clients.append(q)
         try:
-            # Send initial data
             is_connected = mqtt_client.is_connected() if mqtt_client else False
             yield f"data: {json.dumps({'type': 'status', 'data': {'mqtt_connected': is_connected}})}\n\n"
-            
+
+            with state_lock:
+                current_state = dict(device_state)
+            yield f"data: {json.dumps({'type': 'device_state', 'data': current_state})}\n\n"
+
             latest = get_latest_data()
             if latest:
                 yield f"data: {json.dumps({'type': 'sensor', 'data': dict(latest)})}\n\n"
@@ -307,6 +335,12 @@ def api_control():
         return jsonify({"error": "Invalid action"}), 400
     publish_control(action, duration_sec=duration_sec, reason="manual")
     return jsonify({"status": "ok"})
+
+@app.route("/api/device-state")
+def api_device_state():
+    with state_lock:
+        current = dict(device_state)
+    return jsonify(current)
 
 @app.route("/api/settings", methods=["GET", "POST"])
 def api_settings():
