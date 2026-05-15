@@ -13,7 +13,11 @@ void initRelays() {
 
 void handleAction(const char* action, int duration) {
   xSemaphoreTake(xMutex, portMAX_DELAY);
-  if (strcmp(action, "pump_on") == 0) {
+  if (strcmp(action, "mode_manual") == 0) {
+    g_mode = MODE_MANUAL;
+  } else if (strcmp(action, "mode_auto") == 0) {
+    g_mode = MODE_SCHEDULE;
+  } else if (strcmp(action, "pump_on") == 0) {
     g_pump_state = true;
     digitalWrite(PUMP_PIN, HIGH);
     if (duration > 0) {

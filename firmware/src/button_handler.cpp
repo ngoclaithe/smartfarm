@@ -31,20 +31,24 @@ void TaskButton(void* pvParameters) {
 
     if (mode == MODE_MANUAL) {
       if (digitalRead(BTN_PUMP_PIN) == LOW && debounce(0)) {
+        Serial.println("[BTN] Pump Pressed");
         togglePump();
         publishState();
       }
       if (digitalRead(BTN_FAN_PIN) == LOW && debounce(1)) {
+        Serial.println("[BTN] Fan Pressed");
         toggleFan();
         publishState();
       }
       if (digitalRead(BTN_LIGHT_PIN) == LOW && debounce(2)) {
+        Serial.println("[BTN] Light Pressed");
         toggleLight();
         publishState();
       }
     }
 
     if (digitalRead(BTN_MODE_PIN) == LOW && debounce(3)) {
+      Serial.println("[BTN] Mode Pressed");
       xSemaphoreTake(xMutex, portMAX_DELAY);
       g_mode = (g_mode == MODE_MANUAL) ? MODE_SCHEDULE : MODE_MANUAL;
       xSemaphoreGive(xMutex);

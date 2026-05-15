@@ -394,7 +394,9 @@ label {
 }
 
 input[type="number"],
-input[type="time"] {
+input[type="time"],
+select.form-control,
+.form-control {
   background: #0f172a;
   color: var(--text);
   border: 1px solid var(--line);
@@ -405,7 +407,15 @@ input[type="time"] {
   width: 100%;
 }
 
-input:focus {
+select.form-control option {
+  background: #0f172a;
+  color: var(--text);
+  padding: 10px;
+}
+
+input:focus,
+select:focus,
+.form-control:focus {
   outline: none;
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);

@@ -1,6 +1,8 @@
 const $ = (id) => document.getElementById(id);
 const $$ = (sel) => document.querySelectorAll(sel);
 
+let currentDevice = null;
+
 function showToast(message, type = 'success') {
   const container = $('toast-container');
   const toast = document.createElement('div');
@@ -139,46 +141,6 @@ async function loadInitialHistory() {
   }
 }
 
-function renderSchedules(items) {
-  const root = $("schedule-list");
-  root.innerHTML = "";
-  if (!items.length) {
-    root.innerHTML = "<p style='color: var(--text-muted);'>Chưa có lịch tưới nào được thiết lập.</p>";
-    return;
-  }
-  items.forEach(item => {
-    const row = document.createElement("div");
-    row.className = "schedule-item";
-    row.innerHTML = `
-      <div class="schedule-info">
-        <strong><i class="fa-regular fa-clock"></i> ${item.time_of_day}</strong>
-        <span>Tưới: ${item.duration_sec}s | Lần cuối: ${item.last_run_date || "Chưa chạy"}</span>
-      </div>
-      <div class="schedule-actions">
-        <button class="btn sm toggle-btn ${item.enabled ? '' : 'primary'}">
-          <i class="fa-solid ${item.enabled ? 'fa-toggle-on' : 'fa-toggle-off'}"></i> ${item.enabled ? "Tắt" : "Bật"}
-        </button>
-        <button class="btn sm danger delete-btn"><i class="fa-solid fa-trash"></i> Xóa</button>
-      </div>
-    `;
-    row.querySelector(".toggle-btn").onclick = async () => {
-      await api(`/api/schedules/${item.id}/toggle`, {
-        method: "POST", body: JSON.stringify({ enabled: !item.enabled }),
-      });
-      showToast(`Đã ${item.enabled ? 'tắt' : 'bật'} lịch tưới ${item.time_of_day}`);
-      await loadSchedules();
-    };
-    row.querySelector(".delete-btn").onclick = async () => {
-      if (confirm(`Xóa lịch lúc ${item.time_of_day}?`)) {
-        await api("/api/schedules", { method: "DELETE", body: JSON.stringify({ id: item.id }) });
-        showToast("Đã xóa lịch tưới");
-        await loadSchedules();
-      }
-    };
-    root.appendChild(row);
-  });
-}
-
 function updateLatestData(data) {
   $("temperature").textContent = data.temperature.toFixed(1);
   $("air_humidity").textContent = data.air_humidity.toFixed(1);
@@ -222,7 +184,17 @@ function updateDeviceState(state) {
   });
 
   const isManual = state.mode === "manual";
+  
+  const modeInput = $('toggle-mode');
+  const modeLabel = $('mode-label');
+  if (modeInput && modeLabel) {
+    modeInput.checked = !isManual;
+    modeLabel.textContent = isManual ? "THỦ CÔNG" : "TỰ ĐỘNG";
+    modeLabel.style.color = isManual ? "#ef4444" : "#10b981";
+  }
+
   $$('.control-card').forEach(card => {
+    if (card.querySelector('#toggle-mode')) return;
     card.classList.toggle('disabled', !isManual);
   });
 }
@@ -247,7 +219,6 @@ function setupToggle(toggleId, onAction, offAction) {
   });
 }
 
-// SSE
 function initSSE() {
   const evtSource = new EventSource("/api/stream");
   evtSource.onmessage = function(event) {
@@ -269,18 +240,6 @@ function initSSE() {
   evtSource.onerror = () => updateMqttStatus(false);
 }
 
-async function loadSettings() {
-  const settings = await api("/api/settings");
-  $("threshold-enabled").checked = settings.threshold_enabled;
-  $("soil-threshold").value = settings.soil_moisture_threshold;
-  $("default-duration").value = settings.default_duration_sec;
-}
-
-async function loadSchedules() {
-  const schedules = await api("/api/schedules");
-  renderSchedules(schedules);
-}
-
 async function loadDeviceState() {
   try {
     const state = await api("/api/device-state");
@@ -288,48 +247,145 @@ async function loadDeviceState() {
   } catch {}
 }
 
+// --- AUTOMATION MODAL ---
+
+function openSettings(device, deviceName) {
+  currentDevice = device;
+  $('modal-title').textContent = `Cài đặt tự động: ${deviceName}`;
+  $('settings-modal').classList.add('active');
+  loadAutomations();
+}
+
+function closeSettings() {
+  $('settings-modal').classList.remove('active');
+  currentDevice = null;
+}
+
+function switchModalTab(tabId) {
+  $$('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  $$('.tab-content').forEach(content => content.classList.remove('active'));
+  document.querySelector(`.tab-btn[onclick="switchModalTab('${tabId}')"]`).classList.add('active');
+  $(`tab-${tabId}`).classList.add('active');
+}
+
+async function loadAutomations() {
+  if (!currentDevice) return;
+  const list = await api(`/api/automations?device=${currentDevice}`);
+  renderAutomations(list);
+}
+
+function renderAutomations(items) {
+  const threshList = $('list-threshold');
+  const schedList = $('list-schedule');
+  threshList.innerHTML = '';
+  schedList.innerHTML = '';
+
+  items.forEach(item => {
+    const isThresh = item.type === 'threshold';
+    const row = document.createElement('div');
+    row.className = 'auto-item';
+    
+    let infoHtml = '';
+    if (isThresh) {
+      const sMap = {soil_moisture: "Độ ẩm đất", temperature: "Nhiệt độ", air_humidity: "Độ ẩm KK"};
+      const aMap = {on: "Bật", off: "Tắt"};
+      infoHtml = `
+        <div class="auto-info">
+          <strong>${sMap[item.sensor] || item.sensor} ${item.condition} ${item.threshold_value}</strong>
+          <span>=> ${aMap[item.action] || item.action} (${item.duration_sec === 0 ? 'Vô hạn' : item.duration_sec + 's'})</span>
+        </div>
+      `;
+    } else {
+      infoHtml = `
+        <div class="auto-info">
+          <strong><i class="fa-regular fa-clock"></i> ${item.time_of_day} - ${item.end_time || 'K.Rõ'}</strong>
+          <span>=> Bật từ ${item.time_of_day} và Tắt lúc ${item.end_time || 'K.Rõ'}</span>
+        </div>
+      `;
+    }
+
+    row.innerHTML = `
+      ${infoHtml}
+      <div style="display:flex; gap:10px; align-items:center;">
+        <label class="toggle-switch">
+          <input type="checkbox" ${item.is_enabled ? 'checked' : ''} onchange="toggleAutomation(${item.id}, this.checked)" />
+          <span class="slider"></span>
+        </label>
+        <button class="btn sm danger settings-btn" style="color: var(--danger); padding:0; background:none;" onclick="deleteAutomation(${item.id})"><i class="fa-solid fa-trash"></i></button>
+      </div>
+    `;
+
+    if (isThresh) threshList.appendChild(row);
+    else schedList.appendChild(row);
+  });
+}
+
+window.toggleAutomation = async function(id, enabled) {
+  await api(`/api/automations/${id}/toggle`, {
+    method: "POST", body: JSON.stringify({ enabled }),
+  });
+  showToast(`Đã ${enabled ? 'bật' : 'tắt'} luật tự động`);
+}
+
+function customConfirm(message) {
+  return new Promise((resolve) => {
+    const modal = $('confirm-modal');
+    $('confirm-message').textContent = message;
+    modal.classList.add('active');
+
+    const btnOk = $('confirm-ok');
+    const btnCancel = $('confirm-cancel');
+
+    const cleanup = () => {
+      modal.classList.remove('active');
+      btnOk.removeEventListener('click', onOk);
+      btnCancel.removeEventListener('click', onCancel);
+    };
+
+    const onOk = () => { cleanup(); resolve(true); };
+    const onCancel = () => { cleanup(); resolve(false); };
+
+    btnOk.addEventListener('click', onOk);
+    btnCancel.addEventListener('click', onCancel);
+  });
+}
+
+window.deleteAutomation = async function(id) {
+  const confirmed = await customConfirm("Bạn có chắc chắn muốn xóa luật này?");
+  if (!confirmed) return;
+  await api(`/api/automations/${id}`, { method: "DELETE" });
+  showToast("Đã xóa");
+  await loadAutomations();
+}
+
+window.addAutomation = async function(type) {
+  if (!currentDevice) return;
+  const payload = { device: currentDevice, type };
+  
+  if (type === 'threshold') {
+    payload.sensor = $('auto-sensor').value;
+    payload.condition = $('auto-condition').value;
+    payload.threshold_value = parseFloat($('auto-value').value);
+    payload.action = $('auto-action-thresh').value;
+    payload.duration_sec = parseInt($('auto-duration-thresh').value);
+  } else {
+    payload.time_of_day = $('auto-time-start').value;
+    payload.end_time = $('auto-time-end').value;
+    if (!payload.time_of_day || !payload.end_time) return showToast("Vui lòng nhập cả giờ bật và tắt", "error");
+  }
+
+  await api("/api/automations", {
+    method: "POST", body: JSON.stringify(payload)
+  });
+  showToast("Đã thêm luật tự động mới");
+  await loadAutomations();
+}
+
 function initActions() {
+  setupToggle("toggle-mode", "mode_auto", "mode_manual");
   setupToggle("toggle-pump", "pump_on", "pump_off");
   setupToggle("toggle-fan", "fan_on", "fan_off");
   setupToggle("toggle-light", "light_on", "light_off");
-
-  $("save-settings").onclick = async () => {
-    const btn = $("save-settings");
-    const orig = btn.innerHTML;
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang lưu...';
-    btn.disabled = true;
-    try {
-      await api("/api/settings", {
-        method: "POST",
-        body: JSON.stringify({
-          threshold_enabled: $("threshold-enabled").checked,
-          soil_moisture_threshold: parseFloat($("soil-threshold").value),
-          default_duration_sec: parseInt($("default-duration").value || "8", 10),
-        }),
-      });
-      showToast("Đã lưu cấu hình tự động");
-      await loadSettings();
-    } finally {
-      btn.innerHTML = orig;
-      btn.disabled = false;
-    }
-  };
-
-  $("add-schedule").onclick = async () => {
-    const timeOfDay = $("schedule-time").value;
-    const duration = parseInt($("schedule-duration").value || "10", 10);
-    if (!timeOfDay) {
-      showToast("Vui lòng chọn thời gian tưới", "error");
-      return;
-    }
-    await api("/api/schedules", {
-      method: "POST",
-      body: JSON.stringify({ time_of_day: timeOfDay, duration_sec: duration }),
-    });
-    showToast("Đã thêm lịch tưới mới");
-    $("schedule-time").value = "";
-    await loadSchedules();
-  };
 }
 
 async function bootstrap() {
@@ -337,7 +393,7 @@ async function bootstrap() {
   initChart();
   initSSE();
   try {
-    await Promise.all([loadSettings(), loadSchedules(), loadInitialHistory(), loadDeviceState()]);
+    await Promise.all([loadInitialHistory(), loadDeviceState()]);
     initActions();
   } catch (err) {
     console.error("Bootstrap error:", err);

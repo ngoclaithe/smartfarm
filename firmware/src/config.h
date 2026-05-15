@@ -19,8 +19,8 @@ const char* const TOPIC_CONTROL  = "esp8266/control";
 
 // Các nút nhấn (ESP32-S3 thoải mái chân, dùng pull-up nội)
 #define BTN_PUMP_PIN  16
-#define BTN_FAN_PIN   17
-#define BTN_LIGHT_PIN 18
+#define BTN_FAN_PIN   1
+#define BTN_LIGHT_PIN 2
 #define BTN_MODE_PIN  21
 
 // I2C cho OLED 1.3 inch (SH1106)

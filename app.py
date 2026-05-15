@@ -17,8 +17,8 @@ MQTT_PORT = 1883
 MQTT_DATA_TOPIC = "esp8266/data"
 MQTT_CONTROL_TOPIC = "esp8266/control"
 
-AUTO_CHECK_INTERVAL_SECONDS = 10
-SCHEDULE_CHECK_INTERVAL_SECONDS = 20
+AUTO_CHECK_INTERVAL_SECONDS = 5
+SCHEDULE_CHECK_INTERVAL_SECONDS = 1
 WATERING_COOLDOWN_SECONDS = 300
 CLEANUP_INTERVAL_SECONDS = 3600
 
@@ -27,7 +27,7 @@ app.config["JSON_AS_ASCII"] = False
 
 mqtt_client: mqtt.Client | None = None
 state_lock = threading.Lock()
-last_auto_trigger_at = 0.0
+last_auto_triggers = {}
 
 device_state = {
     "pump": False,
@@ -66,32 +66,26 @@ def init_db() -> None:
             """
         )
         conn.execute("CREATE INDEX IF NOT EXISTS idx_sensor_created_at ON sensor_data(created_at)")
+        
+        conn.execute("DROP TABLE IF EXISTS automations")
+        
         conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS irrigation_settings (
-                id INTEGER PRIMARY KEY CHECK (id = 1),
-                threshold_enabled INTEGER NOT NULL DEFAULT 0,
-                soil_moisture_threshold REAL NOT NULL DEFAULT 30,
-                default_duration_sec INTEGER NOT NULL DEFAULT 8
-            )
-            """
-        )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS irrigation_schedules (
+            CREATE TABLE IF NOT EXISTS automations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                time_of_day TEXT NOT NULL,
-                duration_sec INTEGER NOT NULL,
-                enabled INTEGER NOT NULL DEFAULT 1,
-                last_run_date TEXT
+                device TEXT NOT NULL,
+                type TEXT NOT NULL,
+                is_enabled INTEGER DEFAULT 1,
+                sensor TEXT,
+                condition TEXT,
+                threshold_value REAL,
+                time_of_day TEXT,
+                end_time TEXT,
+                action TEXT DEFAULT 'on',
+                duration_sec INTEGER DEFAULT 0,
+                last_run_date TEXT,
+                last_end_date TEXT
             )
-            """
-        )
-        conn.execute(
-            """
-            INSERT OR IGNORE INTO irrigation_settings (
-                id, threshold_enabled, soil_moisture_threshold, default_duration_sec
-            ) VALUES (1, 0, 30, 8)
             """
         )
 
@@ -123,44 +117,6 @@ def get_recent_data(limit: int = 20) -> list[sqlite3.Row]:
         return conn.execute(
             "SELECT temperature, air_humidity, soil_moisture, created_at FROM sensor_data ORDER BY id DESC LIMIT ?", (limit,)
         ).fetchall()
-
-def get_settings() -> sqlite3.Row:
-    with get_db() as conn:
-        return conn.execute(
-            "SELECT threshold_enabled, soil_moisture_threshold, default_duration_sec FROM irrigation_settings WHERE id = 1"
-        ).fetchone()
-
-def update_settings(threshold_enabled: bool, soil_threshold: float, default_duration_sec: int) -> None:
-    with get_db() as conn:
-        conn.execute(
-            "UPDATE irrigation_settings SET threshold_enabled = ?, soil_moisture_threshold = ?, default_duration_sec = ? WHERE id = 1",
-            (1 if threshold_enabled else 0, soil_threshold, default_duration_sec),
-        )
-
-def list_schedules() -> list[sqlite3.Row]:
-    with get_db() as conn:
-        return conn.execute(
-            "SELECT id, time_of_day, duration_sec, enabled, last_run_date FROM irrigation_schedules ORDER BY time_of_day ASC"
-        ).fetchall()
-
-def add_schedule(time_of_day: str, duration_sec: int) -> None:
-    with get_db() as conn:
-        conn.execute(
-            "INSERT INTO irrigation_schedules (time_of_day, duration_sec, enabled, last_run_date) VALUES (?, ?, 1, NULL)",
-            (time_of_day, duration_sec),
-        )
-
-def delete_schedule(schedule_id: int) -> None:
-    with get_db() as conn:
-        conn.execute("DELETE FROM irrigation_schedules WHERE id = ?", (schedule_id,))
-
-def toggle_schedule(schedule_id: int, enabled: bool) -> None:
-    with get_db() as conn:
-        conn.execute("UPDATE irrigation_schedules SET enabled = ? WHERE id = ?", (1 if enabled else 0, schedule_id))
-
-def mark_schedule_run(schedule_id: int, today: str) -> None:
-    with get_db() as conn:
-        conn.execute("UPDATE irrigation_schedules SET last_run_date = ? WHERE id = ?", (today, schedule_id))
 
 def publish_control(action: str, duration_sec: int = 0, reason: str = "manual") -> None:
     payload = {
@@ -220,7 +176,7 @@ def start_mqtt() -> None:
         print(f"Failed to connect MQTT: {e}")
 
 def threshold_worker() -> None:
-    global last_auto_trigger_at
+    global last_auto_triggers
     while True:
         try:
             with state_lock:
@@ -229,19 +185,40 @@ def threshold_worker() -> None:
                 time.sleep(AUTO_CHECK_INTERVAL_SECONDS)
                 continue
 
-            settings = get_settings()
             latest = get_latest_data()
-            if settings and latest and settings["threshold_enabled"] == 1:
-                soil = float(latest["soil_moisture"])
-                threshold = float(settings["soil_moisture_threshold"])
-                now = time.time()
+            if not latest:
+                time.sleep(AUTO_CHECK_INTERVAL_SECONDS)
+                continue
+
+            with get_db() as conn:
+                rules = conn.execute("SELECT * FROM automations WHERE type='threshold' AND is_enabled=1").fetchall()
+            
+            now = time.time()
+            for rule in rules:
+                rule_id = rule["id"]
+                device = rule["device"]
+                sensor = rule["sensor"]
+                condition = rule["condition"]
+                thresh = float(rule["threshold_value"])
+                action = rule["action"]
+                duration = int(rule["duration_sec"])
+
+                # Handle potentially missing sensors gracefully
+                if sensor not in latest.keys(): continue
+                val = float(latest[sensor])
+                
+                is_match = (condition == '<' and val < thresh) or (condition == '>' and val > thresh)
+                
                 with state_lock:
-                    can_trigger = now - last_auto_trigger_at >= WATERING_COOLDOWN_SECONDS
-                if soil < threshold and can_trigger:
-                    duration = int(settings["default_duration_sec"])
-                    publish_control("pump_on", duration_sec=duration, reason="threshold")
+                    last_trig = last_auto_triggers.get(rule_id, 0.0)
+                    can_trigger = (now - last_trig) >= WATERING_COOLDOWN_SECONDS
+
+                if is_match and can_trigger:
+                    action_str = f"{device}_{action}"
+                    publish_control(action_str, duration_sec=duration, reason="threshold")
                     with state_lock:
-                        last_auto_trigger_at = now
+                        last_auto_triggers[rule_id] = now
+
         except Exception as exc:
             print(f"Threshold worker error: {exc}")
         time.sleep(AUTO_CHECK_INTERVAL_SECONDS)
@@ -256,17 +233,38 @@ def schedule_worker() -> None:
                 continue
 
             now = datetime.now()
-            current_hhmm = now.strftime("%H:%M")
+            current_time = now.strftime("%H:%M:%S")
             today = now.strftime("%Y-%m-%d")
-            schedules = list_schedules()
-            for item in schedules:
-                if (
-                    item["enabled"] == 1
-                    and item["time_of_day"] == current_hhmm
-                    and item["last_run_date"] != today
-                ):
-                    publish_control("pump_on", duration_sec=int(item["duration_sec"]), reason="schedule")
-                    mark_schedule_run(int(item["id"]), today)
+            
+            with get_db() as conn:
+                rules = conn.execute("SELECT * FROM automations WHERE type='schedule' AND is_enabled=1").fetchall()
+
+            for rule in rules:
+                device = rule["device"]
+                start_t = rule["time_of_day"]
+                end_t = rule["end_time"]
+                
+                # Format to HH:MM:SS if missing seconds
+                if start_t and len(start_t) == 5: start_t += ":00"
+                if end_t and len(end_t) == 5: end_t += ":00"
+                
+                # Safely access last_run / last_end
+                last_run = rule["last_run_date"]
+                # sqlite3.Row might throw error if column doesn't exist, but we added it
+                last_end = rule["last_end_date"]
+                
+                # Bật thiết bị khi đến giờ bắt đầu
+                if start_t and current_time >= start_t and last_run != today:
+                    publish_control(f"{device}_on", duration_sec=0, reason="schedule")
+                    with get_db() as conn:
+                        conn.execute("UPDATE automations SET last_run_date=? WHERE id=?", (today, rule["id"]))
+                
+                # Tắt thiết bị khi đến giờ kết thúc
+                if end_t and current_time >= end_t and last_end != today:
+                    publish_control(f"{device}_off", duration_sec=0, reason="schedule")
+                    with get_db() as conn:
+                        conn.execute("UPDATE automations SET last_end_date=? WHERE id=?", (today, rule["id"]))
+
         except Exception as exc:
             print(f"Schedule worker error: {exc}")
         time.sleep(SCHEDULE_CHECK_INTERVAL_SECONDS)
@@ -327,17 +325,20 @@ def api_history():
 
 @app.route("/api/control", methods=["POST"])
 def api_control():
-    with state_lock:
-        mode = device_state["mode"]
-    if mode != "manual":
-        return jsonify({"error": "Dang o che do hen gio, khong the dieu khien thu cong"}), 403
-
     body = request.get_json(silent=True) or {}
     action = body.get("action")
     duration_sec = int(body.get("duration_sec", 0))
-    valid_actions = {"pump_on", "pump_off", "fan_on", "fan_off", "light_on", "light_off"}
+    valid_actions = {"pump_on", "pump_off", "fan_on", "fan_off", "light_on", "light_off", "mode_auto", "mode_manual"}
+    
     if action not in valid_actions:
         return jsonify({"error": "Invalid action"}), 400
+
+    if action not in ["mode_auto", "mode_manual"]:
+        with state_lock:
+            mode = device_state["mode"]
+        if mode != "manual":
+            return jsonify({"error": "Dang o che do hen gio, khong the dieu khien thu cong"}), 403
+
     publish_control(action, duration_sec=duration_sec, reason="manual")
     return jsonify({"status": "ok"})
 
@@ -347,58 +348,53 @@ def api_device_state():
         current = dict(device_state)
     return jsonify(current)
 
-@app.route("/api/settings", methods=["GET", "POST"])
-def api_settings():
+@app.route("/api/automations", methods=["GET", "POST"])
+def api_automations():
     if request.method == "POST":
         body = request.get_json(silent=True) or {}
-        try:
-            enabled = bool(body.get("threshold_enabled", False))
-            threshold = float(body.get("soil_moisture_threshold", 30))
-            duration_sec = int(body.get("default_duration_sec", 8))
-        except (ValueError, TypeError):
-            return jsonify({"error": "Invalid settings payload"}), 400
-        update_settings(enabled, threshold, duration_sec)
-    settings = get_settings()
-    return jsonify(
-        {
-            "threshold_enabled": bool(settings["threshold_enabled"]),
-            "soil_moisture_threshold": settings["soil_moisture_threshold"],
-            "default_duration_sec": settings["default_duration_sec"],
-        }
-    )
+        device = body.get("device")
+        type_ = body.get("type")
+        
+        with get_db() as conn:
+            if type_ == "threshold":
+                sensor = body.get("sensor", "soil_moisture")
+                condition = body.get("condition", "<")
+                thresh = float(body.get("threshold_value", 0))
+                action = body.get("action", "on")
+                dur = int(body.get("duration_sec", 0))
+                conn.execute(
+                    "INSERT INTO automations (device, type, sensor, condition, threshold_value, action, duration_sec) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (device, type_, sensor, condition, thresh, action, dur)
+                )
+            elif type_ == "schedule":
+                time_of_day = body.get("time_of_day")
+                end_time = body.get("end_time")
+                conn.execute(
+                    "INSERT INTO automations (device, type, time_of_day, end_time) VALUES (?, ?, ?, ?)",
+                    (device, type_, time_of_day, end_time)
+                )
+        return jsonify({"status": "ok"})
+    
+    device = request.args.get("device")
+    with get_db() as conn:
+        if device:
+            rows = conn.execute("SELECT * FROM automations WHERE device = ? ORDER BY id DESC", (device,)).fetchall()
+        else:
+            rows = conn.execute("SELECT * FROM automations ORDER BY id DESC").fetchall()
+    return jsonify([dict(r) for r in rows])
 
-@app.route("/api/schedules", methods=["GET", "POST", "DELETE"])
-def api_schedules():
-    if request.method == "POST":
-        body = request.get_json(silent=True) or {}
-        time_of_day = str(body.get("time_of_day", "")).strip()
-        duration_sec = int(body.get("duration_sec", 8))
-        if len(time_of_day) != 5 or ":" not in time_of_day:
-            return jsonify({"error": "time_of_day must be HH:MM"}), 400
-        add_schedule(time_of_day, duration_sec)
-    elif request.method == "DELETE":
-        body = request.get_json(silent=True) or {}
-        schedule_id = int(body.get("id", 0))
-        delete_schedule(schedule_id)
-    schedules = list_schedules()
-    return jsonify(
-        [
-            {
-                "id": s["id"],
-                "time_of_day": s["time_of_day"],
-                "duration_sec": s["duration_sec"],
-                "enabled": bool(s["enabled"]),
-                "last_run_date": s["last_run_date"],
-            }
-            for s in schedules
-        ]
-    )
+@app.route("/api/automations/<int:auto_id>", methods=["DELETE"])
+def api_delete_automation(auto_id: int):
+    with get_db() as conn:
+        conn.execute("DELETE FROM automations WHERE id = ?", (auto_id,))
+    return jsonify({"status": "ok"})
 
-@app.route("/api/schedules/<int:schedule_id>/toggle", methods=["POST"])
-def api_toggle_schedule(schedule_id: int):
+@app.route("/api/automations/<int:auto_id>/toggle", methods=["POST"])
+def api_toggle_automation(auto_id: int):
     body = request.get_json(silent=True) or {}
     enabled = bool(body.get("enabled", True))
-    toggle_schedule(schedule_id, enabled)
+    with get_db() as conn:
+        conn.execute("UPDATE automations SET is_enabled = ? WHERE id = ?", (1 if enabled else 0, auto_id))
     return jsonify({"status": "ok"})
 
 def bootstrap() -> None:

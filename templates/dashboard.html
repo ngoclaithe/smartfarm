@@ -10,6 +10,48 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+      .modal-overlay {
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+        display: flex; justify-content: center; align-items: center; z-index: 1000;
+        opacity: 0; pointer-events: none; transition: 0.3s ease;
+      }
+      .modal-overlay.active { opacity: 1; pointer-events: auto; }
+      .modal {
+        background: var(--surface); border: 1px solid var(--border);
+        border-radius: 16px; width: 90%; max-width: 600px;
+        box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+        transform: translateY(20px); transition: 0.3s ease;
+        max-height: 90vh; display: flex; flex-direction: column;
+      }
+      .modal-overlay.active .modal { transform: translateY(0); }
+      .modal-header {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 20px 24px; border-bottom: 1px solid var(--border);
+      }
+      .modal-header h3 { margin: 0; font-size: 1.25rem; font-weight: 600; }
+      .close-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.25rem; }
+      .modal-body { padding: 20px 24px; overflow-y: auto; }
+      .modal-tabs { display: flex; gap: 10px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+      .tab-btn {
+        background: none; border: none; padding: 10px 16px; color: var(--text-muted);
+        cursor: pointer; font-weight: 500; border-bottom: 2px solid transparent;
+      }
+      .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+      .tab-content { display: none; }
+      .tab-content.active { display: block; }
+      .auto-list { margin-top: 20px; display: flex; flex-direction: column; gap: 12px; }
+      .auto-item {
+        background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+        padding: 12px 16px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;
+      }
+      .auto-info { display: flex; flex-direction: column; gap: 4px; }
+      .auto-info strong { font-weight: 500; }
+      .auto-info span { font-size: 0.85rem; color: var(--text-muted); }
+      .settings-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; transition: 0.2s; padding: 5px; }
+      .settings-btn:hover { color: var(--primary); }
+    </style>
   </head>
   <body>
     <div class="app-layout">
@@ -27,9 +69,6 @@
             </a>
             <a href="#" class="nav-item" data-target="page-control">
               <i class="fa-solid fa-gamepad"></i> <span>Điều khiển</span>
-            </a>
-            <a href="#" class="nav-item" data-target="page-automation">
-              <i class="fa-solid fa-robot"></i> <span>Tự động hóa</span>
             </a>
             <a href="#" class="nav-item" data-target="page-history">
               <i class="fa-solid fa-clock-rotate-left"></i> <span>Lịch sử</span>
@@ -100,10 +139,32 @@
           <!-- Page: Control -->
           <section id="page-control" class="page">
             <div class="grid control-panel">
-              <div class="card control-card">
+              <!-- Mode Toggle Card -->
+              <div class="card control-card" style="grid-column: 1 / -1; border-color: rgba(59, 130, 246, 0.3);">
                 <div class="card-header">
-                  <div class="icon-wrap"><i class="fa-solid fa-water"></i></div>
-                  <h3>Bơm Nước</h3>
+                  <div class="icon-wrap" style="color: #3b82f6; background: rgba(59, 130, 246, 0.1);"><i class="fa-solid fa-microchip"></i></div>
+                  <h3>Chế Độ Hoạt Động (ESP32)</h3>
+                </div>
+                <div class="card-body" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+                  <p class="description" style="margin: 0;">Chuyển đổi ESP32 sang Tự Động để kích hoạt các kịch bản bơm/quạt/đèn theo ngưỡng và lịch.</p>
+                  <div class="control-toggle" style="margin: 0; display: flex; align-items: center;">
+                    <span id="mode-label" style="margin-right: 15px; font-weight: 600; font-size: 1.1em; color: #ef4444;">THỦ CÔNG</span>
+                    <label class="toggle-switch large">
+                      <input id="toggle-mode" type="checkbox" />
+                      <span class="slider"></span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Devices -->
+              <div class="card control-card">
+                <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                    <div class="icon-wrap"><i class="fa-solid fa-water"></i></div>
+                    <h3 style="margin:0;">Bơm Nước</h3>
+                  </div>
+                  <button class="settings-btn" onclick="openSettings('pump', 'Bơm Nước')"><i class="fa-solid fa-gear"></i></button>
                 </div>
                 <div class="card-body">
                   <p class="description">Bật tắt máy bơm nước thủ công.</p>
@@ -118,9 +179,12 @@
               </div>
 
               <div class="card control-card">
-                <div class="card-header">
-                  <div class="icon-wrap" style="color: #3b82f6; background: rgba(59, 130, 246, 0.1);"><i class="fa-solid fa-fan"></i></div>
-                  <h3>Quạt</h3>
+                <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                    <div class="icon-wrap" style="color: #3b82f6; background: rgba(59, 130, 246, 0.1);"><i class="fa-solid fa-fan"></i></div>
+                    <h3 style="margin:0;">Quạt</h3>
+                  </div>
+                  <button class="settings-btn" onclick="openSettings('fan', 'Quạt')"><i class="fa-solid fa-gear"></i></button>
                 </div>
                 <div class="card-body">
                   <p class="description">Bật tắt quạt thông gió điều hòa nhiệt độ.</p>
@@ -135,9 +199,12 @@
               </div>
 
               <div class="card control-card">
-                <div class="card-header">
-                  <div class="icon-wrap" style="color: #eab308; background: rgba(234, 179, 8, 0.1);"><i class="fa-regular fa-lightbulb"></i></div>
-                  <h3>Đèn</h3>
+                <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                    <div class="icon-wrap" style="color: #eab308; background: rgba(234, 179, 8, 0.1);"><i class="fa-regular fa-lightbulb"></i></div>
+                    <h3 style="margin:0;">Đèn</h3>
+                  </div>
+                  <button class="settings-btn" onclick="openSettings('light', 'Đèn')"><i class="fa-solid fa-gear"></i></button>
                 </div>
                 <div class="card-body">
                   <p class="description">Bật tắt đèn chiếu sáng quang hợp.</p>
@@ -150,68 +217,6 @@
                   </div>
                 </div>
               </div>
-            </div>
-          </section>
-
-          <!-- Page: Automation -->
-          <section id="page-automation" class="page">
-            <div class="grid schedule-panel">
-              <article class="card">
-                <div class="card-header">
-                  <div class="icon-wrap"><i class="fa-solid fa-gears"></i></div>
-                  <h3>Tự động theo ngưỡng (Bơm)</h3>
-                </div>
-                <div class="card-body">
-                  <p class="description">Tự động bật bơm khi độ ẩm đất xuống dưới ngưỡng cho phép.</p>
-                  <div class="form-group inline">
-                    <label class="toggle-switch">
-                      <input id="threshold-enabled" type="checkbox" />
-                      <span class="slider"></span>
-                    </label>
-                    <span class="toggle-label">Kích hoạt tự động</span>
-                  </div>
-                  <div class="form-group">
-                    <label for="soil-threshold">Ngưỡng độ ẩm đất (%)</label>
-                    <input id="soil-threshold" type="number" min="0" max="100" step="0.1" value="30" />
-                  </div>
-                  <div class="form-group">
-                    <label for="default-duration">Thời gian tưới tự động (giây)</label>
-                    <input id="default-duration" type="number" min="1" value="8" />
-                  </div>
-                  <button id="save-settings" class="btn"><i class="fa-solid fa-floppy-disk"></i> Lưu cấu hình</button>
-                </div>
-              </article>
-
-              <article class="card">
-                <div class="card-header">
-                  <div class="icon-wrap"><i class="fa-regular fa-calendar-plus"></i></div>
-                  <h3>Đặt lịch tưới</h3>
-                </div>
-                <div class="card-body">
-                  <p class="description">Thiết lập thời gian tưới nước tự động trong ngày.</p>
-                  <div class="form-group">
-                    <label for="schedule-time">Thời gian (HH:MM)</label>
-                    <input id="schedule-time" type="time" />
-                  </div>
-                  <div class="form-group">
-                    <label for="schedule-duration">Thời gian tưới (giây)</label>
-                    <input id="schedule-duration" type="number" min="1" value="10" />
-                  </div>
-                  <button id="add-schedule" class="btn primary"><i class="fa-solid fa-plus"></i> Thêm lịch</button>
-                </div>
-              </article>
-
-              <article class="card span-2">
-                <div class="card-header">
-                  <div class="icon-wrap"><i class="fa-solid fa-list-check"></i></div>
-                  <h3>Danh sách lịch tưới</h3>
-                </div>
-                <div class="card-body">
-                  <div id="schedule-list">
-                    <!-- Loaded via JS -->
-                  </div>
-                </div>
-              </article>
             </div>
           </section>
 
@@ -241,6 +246,96 @@
           </section>
         </div>
       </main>
+    </div>
+
+    <!-- Modal Cài Đặt Tự Động Hóa -->
+    <div id="settings-modal" class="modal-overlay">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 id="modal-title">Cài đặt tự động hóa</h3>
+          <button class="close-btn" onclick="closeSettings()"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+          <div class="modal-tabs">
+            <button class="tab-btn active" onclick="switchModalTab('threshold')">Theo ngưỡng</button>
+            <button class="tab-btn" onclick="switchModalTab('schedule')">Theo giờ</button>
+          </div>
+          
+          <div id="tab-threshold" class="tab-content active">
+            <div class="form-group">
+              <label>Cảm biến tham chiếu</label>
+              <select id="auto-sensor" class="form-control">
+                <option value="soil_moisture">Độ ẩm đất</option>
+                <option value="temperature">Nhiệt độ</option>
+                <option value="air_humidity">Độ ẩm không khí</option>
+              </select>
+            </div>
+            <div class="form-group inline" style="margin-top: 15px; display: flex; gap: 10px;">
+              <div style="flex: 1;">
+                <label>Điều kiện</label>
+                <select id="auto-condition" class="form-control">
+                  <option value="<">Nhỏ hơn (<)</option>
+                  <option value=">">Lớn hơn (>)</option>
+                </select>
+              </div>
+              <div style="flex: 1;">
+                <label>Giá trị</label>
+                <input id="auto-value" type="number" step="0.1" value="30" class="form-control" />
+              </div>
+            </div>
+            <div class="form-group inline" style="margin-top: 15px; display: flex; gap: 10px;">
+              <div style="flex: 1;">
+                <label>Hành động</label>
+                <select id="auto-action-thresh" class="form-control">
+                  <option value="on">Bật (ON)</option>
+                  <option value="off">Tắt (OFF)</option>
+                </select>
+              </div>
+              <div style="flex: 1;">
+                <label>Thời gian chạy (giây, 0=vô hạn)</label>
+                <input id="auto-duration-thresh" type="number" value="8" class="form-control" />
+              </div>
+            </div>
+            <button class="btn primary" style="width: 100%; margin-top: 15px;" onclick="addAutomation('threshold')"><i class="fa-solid fa-plus"></i> Thêm luật</button>
+            
+            <div id="list-threshold" class="auto-list"></div>
+          </div>
+
+          <div id="tab-schedule" class="tab-content">
+            <div class="form-group inline" style="display: flex; gap: 10px;">
+              <div style="flex: 1;">
+                <label>Thời gian bật (HH:MM:SS)</label>
+                <input id="auto-time-start" type="time" step="1" class="form-control" />
+              </div>
+              <div style="flex: 1;">
+                <label>Thời gian tắt (HH:MM:SS)</label>
+                <input id="auto-time-end" type="time" step="1" class="form-control" />
+              </div>
+            </div>
+            <button class="btn primary" style="width: 100%; margin-top: 15px;" onclick="addAutomation('schedule')"><i class="fa-solid fa-plus"></i> Thêm lịch</button>
+            
+            <div id="list-schedule" class="auto-list"></div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Confirm Modal -->
+    <div id="confirm-modal" class="modal-overlay">
+      <div class="modal" style="max-width: 400px; text-align: center; padding-top: 10px;">
+        <div class="modal-body" style="padding: 24px;">
+          <div style="font-size: 48px; color: var(--danger); margin-bottom: 16px;">
+            <i class="fa-solid fa-circle-exclamation"></i>
+          </div>
+          <h3 style="margin-bottom: 12px; font-size: 1.25rem;">Xác nhận hành động</h3>
+          <p id="confirm-message" style="color: var(--text-muted); margin-bottom: 24px;">Bạn có chắc chắn muốn thực hiện hành động này?</p>
+          <div style="display: flex; gap: 12px; justify-content: center;">
+            <button class="btn" id="confirm-cancel" style="flex: 1; background: rgba(255,255,255,0.05); border-color: var(--line);">Hủy bỏ</button>
+            <button class="btn danger" id="confirm-ok" style="flex: 1;">Xác nhận</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Toast Container -->
