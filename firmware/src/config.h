@@ -1,27 +1,33 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-const char* const WIFI_SSID     = "YOUR_WIFI_SSID";
-const char* const WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
+const char* const WIFI_SSID     = "TP-Link_B30E";
+const char* const WIFI_PASSWORD = "78533554";
 
-const char* const MQTT_SERVER    = "192.168.1.100";
+const char* const MQTT_SERVER    = "192.168.0.102";
 const int         MQTT_PORT      = 1883;
 const char* const TOPIC_DATA     = "esp8266/data";
 const char* const TOPIC_CONTROL  = "esp8266/control";
 
+// Chân cấu hình cho ESP32-S3
 #define DHTPIN    4
 #define DHTTYPE   DHT11
-#define SOIL_PIN  34
-#define PUMP_PIN  26
-#define FAN_PIN   27
-#define LIGHT_PIN 25
+#define SOIL_PIN  5 // Analog ADC1_CH4
+#define PUMP_PIN  6
+#define FAN_PIN   7
+#define LIGHT_PIN 15
 
-#define BTN_PUMP_PIN  32
-#define BTN_FAN_PIN   33
-#define BTN_LIGHT_PIN 35
-#define BTN_MODE_PIN  39
+// Các nút nhấn (ESP32-S3 thoải mái chân, dùng pull-up nội)
+#define BTN_PUMP_PIN  16
+#define BTN_FAN_PIN   17
+#define BTN_LIGHT_PIN 18
+#define BTN_MODE_PIN  21
 
-#define OLED_ADDRESS 0x3C
+// I2C cho OLED 1.3 inch (SH1106)
+#define I2C_SDA_PIN   8
+#define I2C_SCL_PIN   9
+#define OLED_ADDRESS  0x3C
+
 #define DEBOUNCE_MS  250
 
 #endif

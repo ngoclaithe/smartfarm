@@ -10,12 +10,11 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
   if (deserializeJson(doc, payload, length)) return;
 
   const char* reason = doc["reason"] | "manual";
+  bool isAuto = (strcmp(reason, "schedule") == 0 || strcmp(reason, "threshold") == 0);
 
   xSemaphoreTake(xMutex, portMAX_DELAY);
   OperationMode mode = g_mode;
   xSemaphoreGive(xMutex);
-
-  bool isAuto = (strcmp(reason, "schedule") == 0 || strcmp(reason, "threshold") == 0);
 
   if (mode == MODE_MANUAL && isAuto) return;
   if (mode == MODE_SCHEDULE && !isAuto) return;
@@ -28,12 +27,19 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
 
 void mqtt_reconnect() {
   while (!client.connected()) {
+    Serial.print("Attempting MQTT connection to ");
+    Serial.print(MQTT_SERVER);
+    Serial.print("...");
     String clientId = "ESP32Client-";
     clientId += String(random(0xffff), HEX);
     if (client.connect(clientId.c_str())) {
+      Serial.println("connected!");
       client.subscribe(TOPIC_CONTROL);
       publishState();
     } else {
+      Serial.print("failed, rc=");
+      Serial.print(client.state());
+      Serial.println(" try again in 5 seconds");
       vTaskDelay(5000 / portTICK_PERIOD_MS);
     }
   }
@@ -66,13 +72,17 @@ void publishState() {
   client.publish(TOPIC_DATA, buffer);
 }
 
-void TaskMQTT(void* pvParameters) {
-  (void)pvParameters;
+void initMQTT() {
   setup_wifi();
   client.setServer(MQTT_SERVER, MQTT_PORT);
   client.setCallback(mqtt_callback);
+}
 
-  for (;;) {
+void TaskMQTT(void* pvParameters) {
+  (void)pvParameters;
+  initMQTT();
+
+  for(;;) {
     if (!client.connected()) {
       mqtt_reconnect();
     }

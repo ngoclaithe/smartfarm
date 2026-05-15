@@ -6,6 +6,7 @@
 #include "sensor_task.h"
 #include "mqtt_handler.h"
 #include "button_handler.h"
+#include "wifi_manager.h"
 
 SemaphoreHandle_t xMutex;
 float g_temp = 0.0;
@@ -31,13 +32,15 @@ void setup() {
   initRelays();
   initButtons();
   initDisplay();
-
+  initSensors();
+  
   xMutex = xSemaphoreCreateMutex();
 
-  xTaskCreatePinnedToCore(TaskSensor,  "TaskSensor",  4096, NULL, 1, &TaskSensorHandle,  1);
+  // ESP32-S3 là Dual-Core, tận dụng xTaskCreatePinnedToCore
+  xTaskCreatePinnedToCore(TaskSensor,  "TaskSensor",  4096, NULL, 1, &TaskSensorHandle, 1);
   xTaskCreatePinnedToCore(TaskDisplay, "TaskDisplay", 4096, NULL, 1, &TaskDisplayHandle, 1);
-  xTaskCreatePinnedToCore(TaskButton,  "TaskButton",  4096, NULL, 1, &TaskButtonHandle,  1);
-  xTaskCreatePinnedToCore(TaskMQTT,    "TaskMQTT",    8192, NULL, 2, &TaskMQTTHandle,    0);
+  xTaskCreatePinnedToCore(TaskButton,  "TaskButton",  4096, NULL, 1, &TaskButtonHandle, 1);
+  xTaskCreatePinnedToCore(TaskMQTT,    "TaskMQTT",    8192, NULL, 2, &TaskMQTTHandle, 0); // Core 0 chuyên xử lý mạng
 }
 
 void loop() {

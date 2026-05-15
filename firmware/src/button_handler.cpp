@@ -9,8 +9,8 @@ static unsigned long lastPress[4] = {0, 0, 0, 0};
 void initButtons() {
   pinMode(BTN_PUMP_PIN,  INPUT_PULLUP);
   pinMode(BTN_FAN_PIN,   INPUT_PULLUP);
-  pinMode(BTN_LIGHT_PIN, INPUT);
-  pinMode(BTN_MODE_PIN,  INPUT);
+  pinMode(BTN_LIGHT_PIN, INPUT_PULLUP);
+  pinMode(BTN_MODE_PIN,  INPUT_PULLUP);
 }
 
 static bool debounce(int index) {
@@ -24,8 +24,7 @@ static bool debounce(int index) {
 
 void TaskButton(void* pvParameters) {
   (void)pvParameters;
-
-  for (;;) {
+  for(;;) {
     xSemaphoreTake(xMutex, portMAX_DELAY);
     OperationMode mode = g_mode;
     xSemaphoreGive(xMutex);
@@ -51,7 +50,7 @@ void TaskButton(void* pvParameters) {
       xSemaphoreGive(xMutex);
       publishState();
     }
-
+    
     vTaskDelay(50 / portTICK_PERIOD_MS);
   }
 }

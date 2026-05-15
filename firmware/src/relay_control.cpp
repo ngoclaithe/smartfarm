@@ -13,7 +13,6 @@ void initRelays() {
 
 void handleAction(const char* action, int duration) {
   xSemaphoreTake(xMutex, portMAX_DELAY);
-
   if (strcmp(action, "pump_on") == 0) {
     g_pump_state = true;
     digitalWrite(PUMP_PIN, HIGH);
@@ -40,7 +39,6 @@ void handleAction(const char* action, int duration) {
     g_light_state = false;
     digitalWrite(LIGHT_PIN, LOW);
   }
-
   xSemaphoreGive(xMutex);
 }
 
